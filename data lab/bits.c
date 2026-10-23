@@ -143,7 +143,7 @@ NOTES:
  *   Rating: 1
  */
 int bitXor(int x, int y) {
-  return 2;
+  return ~(~x & ~y) & ~(x & y);
 }
 /* 
  * tmin - return minimum two's complement integer 
@@ -153,7 +153,7 @@ int bitXor(int x, int y) {
  */
 int tmin(void) {
 
-  return 2;
+  return 1 << 31;
 
 }
 //2
@@ -165,7 +165,14 @@ int tmin(void) {
  *   Rating: 1
  */
 int isTmax(int x) {
-  return 2;
+    // 倒二行的算法理论应该是对的，但实际上好像因为出现了1 << 31 的字面量没法放入int的未定义行为导致出错。
+    // 但这又和上一个函数tmin的做法冲突，我同样使用了移位，同样是int,但这个是正确的，只能归咎于神秘的编译器优化了。
+    // int t1 = x+1;
+    // int t2 = 1 << 31;
+    // int ans = t1 ^ t2;
+    // return !ans;
+  // return !((x+1) ^ (1 << 31));
+  return !(~(x+1) ^ x)&!!(x+1);
 }
 /* 
  * allOddBits - return 1 if all odd-numbered bits in word set to 1
@@ -176,7 +183,9 @@ int isTmax(int x) {
  *   Rating: 2
  */
 int allOddBits(int x) {
-  return 2;
+  int t = 0xAA;
+  int k = (t << 24) | (t << 16) | (t << 8) | t;
+  return !((x & k) ^ k) ;
 }
 /* 
  * negate - return -x 
@@ -186,7 +195,7 @@ int allOddBits(int x) {
  *   Rating: 2
  */
 int negate(int x) {
-  return 2;
+  return ~x + 1;
 }
 //3
 /* 
@@ -199,7 +208,13 @@ int negate(int x) {
  *   Rating: 3
  */
 int isAsciiDigit(int x) {
-  return 2;
+    //范围类的判断可以尝试利用减法，减法的实现通过加负数。
+  int a = !((x >> 4) ^ 0x3);
+  int b = x & 0xf;
+  int c = ~0xa + 1;
+  int d = 1 << 15;
+  int e = !!((b+c) & d);
+  return a & e;
 }
 /* 
  * conditional - same as x ? y : z 
@@ -209,7 +224,15 @@ int isAsciiDigit(int x) {
  *   Rating: 3
  */
 int conditional(int x, int y, int z) {
-  return 2;
+    //要实现条件关键在于让x不为1时能够得到0xffffffff同时还得不影响0的表示,
+    //利用补码取非后0不变而1能变为0xffffffff的特性即可实现
+    //剩下就是提取出y或者z,然后同样取非，如果提取出来是0,那么应该返回的就是这个数
+    //提取出来是这个数的非，那么这个数就应该被抵消，是一个逆向的思维。
+  int a = !!(x ^ 0x0);
+  int b = ~a+1;
+  int c = ~(y & ~b) + 1;
+  int d = ~(z & b) + 1;
+  return y+c+z+d;
 }
 /* 
  * isLessOrEqual - if x <= y  then return 1, else return 0 
@@ -219,7 +242,14 @@ int conditional(int x, int y, int z) {
  *   Rating: 3
  */
 int isLessOrEqual(int x, int y) {
-  return 2;
+    //两个数的符号需要考虑，溢出需要考虑，总之就是耐心分类，然后利用相减为负的方法来判断
+  int a = x >> 31 & 0x1;
+  int b = y >> 31 & 0x1;
+  int c1 = a & !b; //x- y+
+  int c2 = !a & b; //x+ y-
+  int d = (~x+1) + y;
+  int e = d >> 31;
+  return c1 | (!c2 & !e);
 }
 //4
 /* 
@@ -231,7 +261,9 @@ int isLessOrEqual(int x, int y) {
  *   Rating: 4 
  */
 int logicalNeg(int x) {
-  return 2;
+  //重点在于区分0和非0,需要利用符号位和算术右移，以及全1加1后翻转为0的特性
+  //就可以实现非0得到0，至于0本身，只需要加1即可，这个操作和前面的加1是一致的
+  return (((~x+1) | x) >> 31) + 1;
 }
 /* howManyBits - return the minimum number of bits required to represent x in
  *             two's complement
@@ -246,7 +278,25 @@ int logicalNeg(int x) {
  *  Rating: 4
  */
 int howManyBits(int x) {
-  return 0;
+    //正数就是从右往左找最左的那个1,负数就是从符号位1开始连续的1的最后一个1
+    //推断一下负数只需要取反需要的操作就和正数一样。
+    //至于如何找到最左的1,本质就是一个查找算法题，从高位开始不断二分即可
+    //至于具体数字如何计算，根据二分的过程模拟一下就行
+  int b16,b8,b4,b2,b1,b0;
+  int flag = x >> 31;
+  int y = (x & ~flag) | (~x & flag);
+  b16 = !!(y >> 16) << 4;
+  y >>= b16;
+  b8 = !!(y >> 8) << 3;
+  y >>= b8;
+  b4 = !!(y >> 4) << 2;
+  y >>= b4;
+  b2 = !!(y >> 2) << 1;
+  y >>= b2;
+  b1 = !!(y >> 1);
+  y >>= b1;
+  b0 = y;
+  return b0+b1+b2+b4+b8+b16+1;
 }
 //float
 /* 
@@ -261,7 +311,19 @@ int howManyBits(int x) {
  *   Rating: 4
  */
 unsigned floatScale2(unsigned uf) {
-  return 2;
+  unsigned exp = (uf & 0x7f800000) >> 23;
+  unsigned sign = (uf >> 31) & 0x1;
+  unsigned frac = uf & 0x7fffff;
+  unsigned res;
+  if(exp == 0xff) return uf;
+  if(exp == 0) {
+     frac <<= 1;
+     res =  (sign << 31) | (exp << 23) | frac;
+  } else {
+     exp++;
+     res = (sign << 31) | (exp << 23) | frac;
+  }
+  return res;
 }
 /* 
  * floatFloat2Int - Return bit-level equivalent of expression (int) f
@@ -276,7 +338,24 @@ unsigned floatScale2(unsigned uf) {
  *   Rating: 4
  */
 int floatFloat2Int(unsigned uf) {
-  return 2;
+    //尾数23位，实际就是尾数左移E位，需要的话舍入
+    //然后再看左移时是否会溢出（即尾数的最高有效位都被放到符号位了）
+  unsigned exp = (uf & 0x7f800000) >> 23;
+  int sign = (uf >> 31) & 0x1;
+  unsigned frac = uf & 0x7fffff;
+  int E = exp - 127;
+  if(E >= 31) return 0x80000000u;
+  if(E < 0) return 0;
+  else {
+      frac = frac | 1 << 23;
+      if(E<23) {
+          frac >>= (23 - E);
+      } else {
+          frac <<= (E - 23);
+      }
+      if(sign) return -frac;
+      else return frac;
+  }
 }
 /* 
  * floatPower2 - Return bit-level equivalent of the expression 2.0^x
@@ -292,5 +371,14 @@ int floatFloat2Int(unsigned uf) {
  *   Rating: 4
  */
 unsigned floatPower2(int x) {
-    return 2;
+    //根据阶码E的范围分类讨论即可
+    if(x > 127) return 0xff << 23;
+    if(x < -148) return 0;
+    if(x >= -126) {
+        int exp = x + 127;
+        return exp << 23;
+    } else {
+        int t = 148 + x;
+        return 1 << t;
+    }
 }
